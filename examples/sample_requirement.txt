@@ -1,0 +1,1 @@
+I want a small app where users can sign up, invite friends, and maybe get points later. We should launch something quickly.
