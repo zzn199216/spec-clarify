@@ -22,10 +22,12 @@ def to_dict(out: SpecClarifyOutput) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description="SpecClarify: turn vague requirements into specs.")
     parser.add_argument("input", nargs="?", default="", help="Raw requirement text")
+    parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON with indentation")
     args = parser.parse_args()
 
     result = clarify(args.input)
-    print(json.dumps(to_dict(result), indent=2))
+    kwargs = {"indent": 2} if args.pretty else {}
+    print(json.dumps(to_dict(result), **kwargs))
 
 
 if __name__ == "__main__":
