@@ -68,3 +68,12 @@ def test_vague_sample_output_includes_clarifications() -> None:
     missing_labels = {m.lower() for m in result.missing}
     assert "target users" in missing_labels or "auth" in " ".join(missing_labels).lower()
     assert len(result.must_ask) <= 3
+
+
+def test_maybe_later_does_not_make_core_features_clear() -> None:
+    """Phrases like 'invite friends, and maybe get points later' must NOT cause
+    core_features to be treated as fully clear."""
+    from specclarify_core.engine import SlotStatus, _evaluate_slots
+
+    status = _evaluate_slots("invite friends, and maybe get points later")
+    assert status["core_features"] != SlotStatus.CLEAR

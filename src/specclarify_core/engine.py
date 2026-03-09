@@ -72,10 +72,17 @@ def _evaluate_slots(text: str) -> dict[str, SlotStatus]:
     else:
         status["target_users"] = SlotStatus.MISSING
 
-    # core_features: explicit list = clear; single feature hints = partial
+    # core_features: never clear if uncertainty markers; prefer partial when vague
+    # Uncertainty: maybe, later, eventually, optional, could
+    uncertainty_markers = ["maybe", "later", "eventually", "optional", "could"]
+    has_uncertainty = any(m in text for m in uncertainty_markers)
+
     feature_mentions = sum(1 for x in ["sign up", "invite", "login", "points", "dashboard", "report"] if x in text)
-    if feature_mentions >= 2 and any(x in text for x in ["and", "plus", ",", "also"]):
-        status["core_features"] = SlotStatus.CLEAR
+    # Clear only when: multiple features, explicit scope, and NO uncertainty
+    if has_uncertainty:
+        status["core_features"] = SlotStatus.PARTIAL
+    elif feature_mentions >= 2 and any(x in text for x in ["and", "plus", ",", "also"]):
+        status["core_features"] = SlotStatus.PARTIAL  # Named features but behavior/priority vague -> partial
     elif feature_mentions >= 1:
         status["core_features"] = SlotStatus.PARTIAL
     else:
@@ -179,16 +186,17 @@ def _build_output_from_slots(
             must_ask.append(slot.question)
     must_ask = must_ask[:3]
 
-    # assumptions
+    # assumptions: execution-oriented, derived from slot states where possible
     text = _normalize(raw)
-    assumptions = [
-        "Single deployable unit unless distributed architecture is mentioned.",
-        "Web or desktop context inferred from 'app' terminology.",
-    ]
-    if "user" in text or "users" in text:
-        assumptions.append("Users are human end-users unless otherwise specified.")
-    if "sign up" in text or "invite" in text:
-        assumptions.append("User accounts and invitations imply email or similar contact flow.")
+    assumptions = ["Assume a web-based MVP unless otherwise specified."]
+
+    if slot_status.get("auth_and_roles") in (SlotStatus.PARTIAL, SlotStatus.MISSING):
+        assumptions.append("Assume a single end-user role unless multiple roles are explicitly mentioned.")
+    if "maybe" in text or "later" in text or "eventually" in text:
+        assumptions.append("Assume deferred features are out of MVP scope unless explicitly prioritized.")
+    if slot_status.get("data_persistence") in (SlotStatus.PARTIAL, SlotStatus.MISSING):
+        assumptions.append("Assume minimal persistence (e.g. user profiles) until data model is specified.")
+
     assumptions = assumptions[:4]
 
     # risks: tied to slot gaps
@@ -204,13 +212,15 @@ def _build_output_from_slots(
         risks.extend(["Key requirement areas need clarification.", "Assumptions may not match stakeholder intent."])
     risks = risks[:4]
 
-    # draft_spec
+    # draft_spec: actionable, with MVP and optional out-of-scope section
+    has_deferred = any(x in text for x in ["maybe", "later", "eventually", "optional"])
+
     lines = [
         "## Goal",
         goal_text,
         "",
-        "## Scope",
-        "To be refined. Key gaps: " + "; ".join(missing[:5]) + ".",
+        "## MVP",
+        "To be defined after clarifying: " + "; ".join(missing[:5]) + ".",
         "",
         "## Users",
         "Target users need clarification." if slot_status.get("target_users") != SlotStatus.CLEAR else "See confirmed.",
@@ -219,6 +229,8 @@ def _build_output_from_slots(
     ]
     for q in must_ask:
         lines.append(f"- {q}")
+    if has_deferred:
+        lines.extend(["", "## Out of Scope (tentative)", "Features marked 'maybe/later/eventually' until prioritized."])
     lines.extend(["", "## Assumptions"])
     for a in assumptions:
         lines.append(f"- {a}")
