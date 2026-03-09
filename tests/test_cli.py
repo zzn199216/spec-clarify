@@ -1,10 +1,8 @@
 """CLI tests."""
 
+import subprocess
 import tempfile
 from pathlib import Path
-
-# Use subprocess for real CLI invocation
-# Simpler: call the CLI module and capture. Use subprocess for real CLI invocation.
 
 
 def test_markdown_format_renders_all_sections() -> None:
@@ -33,8 +31,6 @@ def test_markdown_format_renders_all_sections() -> None:
 
 def test_input_file_reads_content() -> None:
     """--input-file reads requirement text from file."""
-    import subprocess
-
     with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
         f.write("I need a dashboard for admins.")
         path = f.name
@@ -55,8 +51,6 @@ def test_input_file_reads_content() -> None:
 
 def test_no_input_returns_error() -> None:
     """CLI exits with error when no input is provided."""
-    import subprocess
-
     result = subprocess.run(
         ["python", "-m", "specclarify_core.cli"],
         capture_output=True,

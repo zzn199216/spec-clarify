@@ -70,6 +70,34 @@ def test_vague_sample_output_includes_clarifications() -> None:
     assert len(result.must_ask) <= 3
 
 
+DEMO_INPUT = (
+    "I want a small app where users can sign up, invite friends, and maybe get points later. "
+    "We should launch something quickly."
+)
+
+
+def test_golden_sample_demo_input() -> None:
+    """Golden sample: demo input produces stable, expected output shape."""
+    from specclarify_core.engine import clarify
+
+    result = clarify(DEMO_INPUT)
+    assert "target users" in [m.lower() for m in result.missing]
+    assert len(result.must_ask) <= 3
+    assert "## MVP" in result.draft_spec
+
+
+def test_golden_sample_demo_input() -> None:
+    """Golden sample: demo input produces stable expected structure."""
+    from specclarify_core.engine import clarify
+
+    demo = "I want a small app where users can sign up, invite friends, and maybe get points later. We should launch something quickly."
+    result = clarify(demo)
+
+    assert "target users" in [m.lower() for m in result.missing]
+    assert len(result.must_ask) <= 3
+    assert "## MVP" in result.draft_spec
+
+
 def test_maybe_later_does_not_make_core_features_clear() -> None:
     """Phrases like 'invite friends, and maybe get points later' must NOT cause
     core_features to be treated as fully clear."""
