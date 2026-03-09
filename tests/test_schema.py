@@ -41,3 +41,30 @@ def test_must_ask_contains_at_most_three_items() -> None:
 
     result = clarify("vague request with no details")
     assert len(result.must_ask) <= 3
+
+
+def test_vague_mentions_not_treated_as_clear() -> None:
+    """Vague mentions like 'users can sign up' and 'launch quickly' must NOT cause
+    target_users, auth_and_roles, or timeline to be treated as fully clear."""
+    from specclarify_core.engine import SlotStatus, _evaluate_slots
+
+    text = "i want a small app where users can sign up, invite friends, and maybe get points later. we should launch something quickly."
+    status = _evaluate_slots(text)
+
+    # These must remain partial or missing, not clear
+    assert status["target_users"] != SlotStatus.CLEAR
+    assert status["auth_and_roles"] != SlotStatus.CLEAR
+    assert status["timeline"] != SlotStatus.CLEAR
+
+
+def test_vague_sample_output_includes_clarifications() -> None:
+    """Sample input should produce missing/must_ask for target_users, auth, timeline."""
+    from specclarify_core.engine import clarify
+
+    result = clarify(
+        "I want a small app where users can sign up, invite friends, and maybe get points later. We should launch something quickly."
+    )
+    # Should need clarification on these areas
+    missing_labels = {m.lower() for m in result.missing}
+    assert "target users" in missing_labels or "auth" in " ".join(missing_labels).lower()
+    assert len(result.must_ask) <= 3
