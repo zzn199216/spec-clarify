@@ -8,6 +8,9 @@ version = "0.1.0"
 description = "Turn vague requirements into executable specs."
 readme = "README.md"
 requires-python = ">=3.9"
+dependencies = [
+    "openai>=1.0.0",
+]
 
 [project.scripts]
 spec-clarify = "specclarify_core.cli:main"

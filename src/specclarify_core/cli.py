@@ -2,10 +2,9 @@
 
 import argparse
 import json
-import sys
 
-from .engine import clarify
 from .schema import SpecClarifyOutput
+from .service import run_clarify
 
 
 def to_dict(out: SpecClarifyOutput) -> dict:
@@ -66,6 +65,23 @@ def get_input_text(args: argparse.Namespace) -> str:
     return ""
 
 
+def build_provider(args: argparse.Namespace):
+    """Build provider from args if needed for llm/hybrid mode."""
+    from specclarify_providers.config import ProviderConfig
+    from specclarify_providers.openai_compatible import OpenAICompatibleProvider
+
+    if args.provider == "openai-compatible":
+        config = ProviderConfig(
+            provider_name="openai-compatible",
+            model=args.model,
+            base_url=args.base_url,
+            api_key_env=args.api_key_env,
+            timeout=float(args.timeout),
+        )
+        return OpenAICompatibleProvider(config)
+    return None
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="SpecClarify: turn vague requirements into specs.",
@@ -87,13 +103,49 @@ def main() -> None:
         help="Output format (default: json)",
     )
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON with indentation")
+
+    # Mode and provider
+    parser.add_argument(
+        "--mode",
+        choices=["rules", "llm", "hybrid"],
+        default="rules",
+        help="Clarification mode (default: rules)",
+    )
+    parser.add_argument(
+        "--provider",
+        choices=["openai-compatible"],
+        help="LLM provider for llm/hybrid mode",
+    )
+    parser.add_argument("--model", default="gpt-4o-mini", help="Model name (default: gpt-4o-mini)")
+    parser.add_argument("--base-url", help="API base URL (for Ollama, LM Studio, etc.)")
+    parser.add_argument(
+        "--api-key-env",
+        default="OPENAI_API_KEY",
+        help="Environment variable for API key (default: OPENAI_API_KEY)",
+    )
+    parser.add_argument("--timeout", type=int, default=60, help="Timeout in seconds (default: 60)")
+
     args = parser.parse_args()
 
     text = get_input_text(args)
     if not text:
         parser.error("No input provided. Give requirement text as argument or use --input-file.")
 
-    result = clarify(text)
+    if args.mode in ("llm", "hybrid"):
+        if not args.provider:
+            parser.error(
+                "LLM/hybrid mode requires --provider. Use --provider openai-compatible."
+            )
+        provider = build_provider(args)
+        if args.mode == "llm" and not args.model:
+            parser.error("LLM mode requires --model.")
+    else:
+        provider = None
+
+    try:
+        result = run_clarify(text, mode=args.mode, provider=provider)
+    except ValueError as e:
+        parser.error(str(e))
 
     if args.format == "markdown":
         output = to_markdown(result)

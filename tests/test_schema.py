@@ -77,22 +77,10 @@ DEMO_INPUT = (
 
 
 def test_golden_sample_demo_input() -> None:
-    """Golden sample: demo input produces stable, expected output shape."""
-    from specclarify_core.engine import clarify
-
-    result = clarify(DEMO_INPUT)
-    assert "target users" in [m.lower() for m in result.missing]
-    assert len(result.must_ask) <= 3
-    assert "## MVP" in result.draft_spec
-
-
-def test_golden_sample_demo_input() -> None:
     """Golden sample: demo input produces stable expected structure."""
     from specclarify_core.engine import clarify
 
-    demo = "I want a small app where users can sign up, invite friends, and maybe get points later. We should launch something quickly."
-    result = clarify(demo)
-
+    result = clarify(DEMO_INPUT)
     assert "target users" in [m.lower() for m in result.missing]
     assert len(result.must_ask) <= 3
     assert "## MVP" in result.draft_spec
