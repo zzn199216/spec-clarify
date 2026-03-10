@@ -20,3 +20,6 @@ Thumbs.db
 # Editors
 .idea/
 .vscode/
+
+# Eval results (generated)
+evals/results/

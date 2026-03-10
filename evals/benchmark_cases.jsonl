@@ -1,0 +1,10 @@
+{"id": "case_01", "raw_input": "I want a small app where users can sign up, invite friends, and maybe get points later. We should launch something quickly.", "task": "Produce a brief implementation plan.", "notes": "Vague social app with deferred features"}
+{"id": "case_02", "raw_input": "We need a dashboard for the team to track progress.", "task": "Produce a brief implementation plan.", "notes": "Unspecified team, progress metrics, scope"}
+{"id": "case_03", "raw_input": "Build a tool that helps with invoices.", "task": "Produce a brief implementation plan.", "notes": "Very vague, no users or features"}
+{"id": "case_04", "raw_input": "Customers should be able to book appointments online. Maybe we add reminders later.", "task": "Produce a brief implementation plan.", "notes": "Booking system, unclear MVP"}
+{"id": "case_05", "raw_input": "An internal wiki for our company. Everyone can edit.", "task": "Produce a brief implementation plan.", "notes": "No auth model, permissions vague"}
+{"id": "case_06", "raw_input": "Mobile app for ordering food. Fast and easy.", "task": "Produce a brief implementation plan.", "notes": "Platform unclear, no restaurant side"}
+{"id": "case_07", "raw_input": "A blog where authors can post and readers can comment.", "task": "Produce a brief implementation plan.", "notes": "Basic features mentioned, roles vague"}
+{"id": "case_08", "raw_input": "We want to collect feedback from users after they use our product.", "task": "Produce a brief implementation plan.", "notes": "Feedback mechanism unspecified"}
+{"id": "case_09", "raw_input": "Tool to manage projects. Tasks, deadlines, that kind of thing.", "task": "Produce a brief implementation plan.", "notes": "Project management, scope open"}
+{"id": "case_10", "raw_input": "Something like Trello but simpler. For small teams.", "task": "Produce a brief implementation plan.", "notes": "Trello-like, small teams"}
