@@ -1,6 +1,7 @@
 # Python
 __pycache__/
 *.py[cod]
+.pytest_cache/
 *.egg-info/
 src/*.egg-info/
 .eggs/
@@ -11,3 +12,11 @@ build/
 .venv/
 venv/
 env/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/
