@@ -2,7 +2,7 @@
 
 def test_adapter_returns_expected_top_level_fields() -> None:
     """Adapter returns a dict with the expected top-level keys."""
-    from adapters.openclaw.adapter import clarify_requirement
+    from specclarify_adapters.openclaw.adapter import clarify_requirement
 
     result = clarify_requirement("I want a login page.")
 
