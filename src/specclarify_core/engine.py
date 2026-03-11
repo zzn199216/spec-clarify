@@ -139,15 +139,99 @@ def _evaluate_slots(text: str) -> dict[str, SlotStatus]:
     return status
 
 
+def _get_domain_specific_questions(text: str) -> list[str]:
+    """Return domain-specific clarification questions when anchors are present."""
+    questions = []
+    if "invoice" in text or "invoic" in text:
+        questions.append("What invoice lifecycle is needed (create, send, track, payment, reporting)?")
+    if "dashboard" in text or "track progress" in text or "progress" in text:
+        questions.append("What progress metrics or data sources should the dashboard show?")
+    if "invite" in text or "points" in text or "referral" in text:
+        questions.append("What invitation flow and reward scope apply for MVP?")
+    if "appointment" in text or "booking" in text:
+        questions.append("What booking workflow and availability model are needed?")
+    if "wiki" in text or "blog" in text:
+        questions.append("What editor/viewer roles and content model are needed?")
+    if "feedback" in text:
+        questions.append("What feedback mechanism and collection triggers are needed?")
+    return questions[:2]  # Max 2 to leave room for general questions
+
+
+def _extract_domain_anchor(text: str) -> str | None:
+    """Extract a key domain/task noun from the text when present."""
+    # Order matters: more specific first
+    anchors = [
+        ("invoice", "invoice"),
+        ("invoic", "invoicing"),
+        ("dashboard", "dashboard"),
+        ("login", "login"),
+        ("sign up", "sign-up"),
+        ("invite", "invitation"),
+        ("points", "points / rewards"),
+        ("appointment", "appointment"),
+        ("booking", "booking"),
+        ("wiki", "wiki"),
+        ("blog", "blog"),
+        ("progress", "progress tracking"),
+        ("track progress", "progress tracking"),
+        ("feedback", "feedback"),
+        ("project", "project management"),
+        ("task", "task management"),
+        ("analytics", "analytics"),
+        ("report", "reporting"),
+    ]
+    for keyword, anchor in anchors:
+        if keyword in text:
+            return anchor
+    return None
+
+
 def _extract_goal(raw: str) -> str:
-    """Extract apparent goal from raw requirement text."""
+    """Extract apparent goal from raw requirement text, preserving domain anchors."""
     text = _normalize(raw)
     if not text:
         return "User has provided a requirement (details unclear)."
+
+    # Pattern: want/need/would like + phrase
     match = re.search(r"(?:i\s+)?(?:want|need|would like)\s+([^.?!]+)", text, re.IGNORECASE)
     if match:
-        return f"User wants: {match.group(1).strip()}."
-    if "app" in text or "application" in text or "system" in text:
+        phrase = match.group(1).strip()
+        if len(phrase) > 8:
+            return f"User wants: {phrase}."
+
+    # Pattern: we need + phrase
+    match = re.search(r"we\s+need\s+([^.?!]+)", text, re.IGNORECASE)
+    if match:
+        phrase = match.group(1).strip()
+        if len(phrase) > 5:
+            return f"User needs: {phrase}."
+
+    # Pattern: tool/app that helps with X (preserve domain noun)
+    match = re.search(
+        r"(?:tool|app|feature|system)\s+(?:that\s+)?(?:helps?\s+with|for)\s+(\w+)",
+        text,
+        re.IGNORECASE,
+    )
+    if match:
+        return f"User wants a tool/app for: {match.group(1)}."
+
+    # Pattern: build/create + phrase (capture through "invoices" etc.)
+    match = re.search(
+        r"(?:build|create|make|develop)\s+(?:a\s+)?([^.!?]+?)(?:\.|$)",
+        text,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if match:
+        phrase = match.group(1).strip()
+        if len(phrase) > 4:
+            return f"User wants to build: {phrase}."
+
+    # Fallback: use domain anchor if present
+    anchor = _extract_domain_anchor(text)
+    if anchor:
+        return f"User wants a solution for: {anchor}."
+
+    if "app" in text or "application" in text:
         return "User wants to build a software application."
     return "User has stated a software/project requirement."
 
@@ -158,6 +242,8 @@ def _build_output_from_slots(
     goal_text: str,
 ) -> SpecClarifyOutput:
     """Generate SpecClarifyOutput from slot states."""
+    text = _normalize(raw)
+
     # confirmed: only CLEAR slots (goal always included if we extracted it)
     confirmed = [goal_text]
     for slot in SLOTS:
@@ -175,19 +261,23 @@ def _build_output_from_slots(
     if not missing:
         missing = ["general scope and constraints"]
 
-    # must_ask: up to 3 from highest-priority partial/missing
+    # must_ask: domain-specific first (up to 2), then slot questions, max 3 total
     must_ask = []
+    domain_questions = _get_domain_specific_questions(text)
+    for q in domain_questions[:2]:  # At most 2 domain-specific
+        must_ask.append(q)
     for slot in SLOTS:
         if len(must_ask) >= 3:
             break
         if slot.key == "goal":
             continue
         if slot_status.get(slot.key) in (SlotStatus.PARTIAL, SlotStatus.MISSING):
-            must_ask.append(slot.question)
+            q = slot.question
+            if q not in must_ask:
+                must_ask.append(q)
     must_ask = must_ask[:3]
 
     # assumptions: execution-oriented, derived from slot states where possible
-    text = _normalize(raw)
     assumptions = ["Assume a web-based MVP unless otherwise specified."]
 
     if slot_status.get("auth_and_roles") in (SlotStatus.PARTIAL, SlotStatus.MISSING):

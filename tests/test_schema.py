@@ -86,6 +86,24 @@ def test_golden_sample_demo_input() -> None:
     assert "## MVP" in result.draft_spec
 
 
+def test_invoice_input_preserves_semantic_anchor() -> None:
+    """Invoice-related input should preserve 'invoice' in goal or draft spec."""
+    from specclarify_core.engine import clarify
+
+    result = clarify("Build a tool that helps with invoices.")
+    combined = (result.confirmed[0] + " " + result.draft_spec).lower()
+    assert "invoice" in combined
+
+
+def test_dashboard_input_produces_domain_specific_question() -> None:
+    """Dashboard-related input should produce at least one dashboard/progress-specific question."""
+    from specclarify_core.engine import clarify
+
+    result = clarify("We need a dashboard for the team to track progress.")
+    must_ask_lower = " ".join(q.lower() for q in result.must_ask)
+    assert "dashboard" in must_ask_lower or "progress" in must_ask_lower or "metric" in must_ask_lower
+
+
 def test_maybe_later_does_not_make_core_features_clear() -> None:
     """Phrases like 'invite friends, and maybe get points later' must NOT cause
     core_features to be treated as fully clear."""
