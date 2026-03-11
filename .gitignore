@@ -21,5 +21,9 @@ Thumbs.db
 .idea/
 .vscode/
 
-# Eval results (generated)
+# Eval artifacts (generated/local; inputs/docs kept)
 evals/results/
+evals/benchmark_cases_3.jsonl
+evals/**/*.tmp
+evals/**/*.local.*
+evals/local/
