@@ -10,14 +10,14 @@ from .config import ProviderConfig
 CLARIFY_PROMPT = """You are a requirement clarification assistant. Given a raw software requirement, produce a structured clarification.
 
 Return ONLY valid JSON matching this schema (no markdown, no extra text):
-{
+{{
   "confirmed": ["string"],
   "missing": ["string"],
   "must_ask": ["string"],
   "assumptions": ["string"],
   "risks": ["string"],
   "draft_spec": "string"
-}
+}}
 
 Raw requirement:
 ---
@@ -28,14 +28,14 @@ Raw requirement:
 HYBRID_PROMPT = """You are a requirement clarification assistant. Refine the following rules-based clarification. Keep the same JSON schema.
 
 Return ONLY valid JSON matching this schema (no markdown, no extra text):
-{
+{{
   "confirmed": ["string"],
   "missing": ["string"],
   "must_ask": ["string"],
   "assumptions": ["string"],
   "risks": ["string"],
   "draft_spec": "string"
-}
+}}
 
 Raw requirement:
 ---
