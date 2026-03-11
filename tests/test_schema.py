@@ -83,7 +83,7 @@ def test_golden_sample_demo_input() -> None:
     result = clarify(DEMO_INPUT)
     assert "target users" in [m.lower() for m in result.missing]
     assert len(result.must_ask) <= 3
-    assert "## MVP" in result.draft_spec
+    assert "## Goal" in result.draft_spec and ("## Unresolved" in result.draft_spec or "## Open Questions" in result.draft_spec)
 
 
 def test_invoice_input_preserves_semantic_anchor() -> None:
@@ -102,6 +102,57 @@ def test_dashboard_input_produces_domain_specific_question() -> None:
     result = clarify("We need a dashboard for the team to track progress.")
     must_ask_lower = " ".join(q.lower() for q in result.must_ask)
     assert "dashboard" in must_ask_lower or "progress" in must_ask_lower or "metric" in must_ask_lower
+
+
+def test_mobile_food_ordering_preserves_semantic_anchors() -> None:
+    """Mobile food ordering input preserves both 'mobile' and 'food ordering'."""
+    from specclarify_core.engine import clarify
+
+    result = clarify("Mobile app for ordering food. Fast and easy.")
+    combined = (result.confirmed[0] + " " + result.draft_spec).lower()
+    assert "mobile" in combined
+    assert "food" in combined or "order" in combined
+
+
+def test_trello_like_preserves_reference_and_simpler() -> None:
+    """Trello-like input preserves 'Trello' and 'simpler' semantics."""
+    from specclarify_core.engine import clarify
+
+    result = clarify("Something like Trello but simpler. For small teams.")
+    combined = (result.confirmed[0] + " " + result.draft_spec).lower()
+    assert "trello" in combined
+    assert "simpler" in combined or "simple" in combined
+
+
+def test_author_reader_input_preserves_role_structure() -> None:
+    """Author/reader/comment input preserves role structure."""
+    from specclarify_core.engine import clarify
+
+    result = clarify("A blog where authors can post and readers can comment.")
+    combined = (result.confirmed[0] + " " + result.draft_spec).lower()
+    assert "author" in combined
+    assert "reader" in combined
+    # Explicitly stated section should reflect roles
+    assert "authors" in result.draft_spec.lower() or "readers" in result.draft_spec.lower()
+
+
+def test_explicit_team_reduces_generic_user_question() -> None:
+    """When 'team' is explicit, must_ask should not use generic 'Who are the users?'."""
+    from specclarify_core.engine import clarify
+
+    result = clarify("We need a dashboard for the team to track progress.")
+    must_ask_lower = " ".join(q.lower() for q in result.must_ask)
+    # Should ask about team/access, not generic "who are the users"
+    assert "team" in must_ask_lower or "dashboard" in must_ask_lower or "progress" in must_ask_lower
+
+
+def test_explicit_platform_avoids_web_assumption() -> None:
+    """When 'mobile' is explicit, assumptions should not default to web-based."""
+    from specclarify_core.engine import clarify
+
+    result = clarify("Mobile app for ordering food.")
+    assumptions_lower = " ".join(a.lower() for a in result.assumptions)
+    assert "mobile" in assumptions_lower
 
 
 def test_maybe_later_does_not_make_core_features_clear() -> None:

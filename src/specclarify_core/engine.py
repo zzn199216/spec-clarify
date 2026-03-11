@@ -64,9 +64,11 @@ def _evaluate_slots(text: str) -> dict[str, SlotStatus]:
     else:
         status["goal"] = SlotStatus.MISSING
 
-    # target_users: "users" / "user" / "friends" = partial (vague); specific roles = clear
+    # target_users: explicit actors (team, customers, authors/readers) = partial; vague = partial; none = missing
     if any(x in text for x in ["b2b", "b2c", "developers", "admins", "providers", "enterprise", "consumer"]):
         status["target_users"] = SlotStatus.CLEAR
+    elif any(x in text for x in ["team", "customers", "authors", "readers", "company", "small teams"]):
+        status["target_users"] = SlotStatus.PARTIAL  # Explicit but roles need refinement
     elif any(x in text for x in ["user", "users", "friends", "people", "audience"]):
         status["target_users"] = SlotStatus.PARTIAL
     else:
@@ -154,7 +156,13 @@ def _get_domain_specific_questions(text: str) -> list[str]:
         questions.append("What editor/viewer roles and content model are needed?")
     if "feedback" in text:
         questions.append("What feedback mechanism and collection triggers are needed?")
-    return questions[:2]  # Max 2 to leave room for general questions
+    if "mobile" in text and ("food" in text or "order" in text):
+        questions.append("What food ordering flow and restaurant/venue side are needed?")
+    if "trello" in text or "like trello" in text:
+        questions.append("Which Trello features to include vs simplify for small teams?")
+    if "authors" in text and "readers" in text:
+        questions.append("What can authors vs readers do (post, comment, moderate)?")
+    return questions[:2]
 
 
 def _extract_domain_anchor(text: str) -> str | None:
@@ -186,11 +194,97 @@ def _extract_domain_anchor(text: str) -> str | None:
     return None
 
 
+def _slot_question_for_context(slot: RequirementSlot, text: str, existing_questions: list[str]) -> str:
+    """Return slot question, or a more targeted one when explicit signals exist. Skip if covered."""
+    if slot.key == "target_users":
+        if "authors" in text and "readers" in text:
+            if any("author" in q.lower() and "reader" in q.lower() for q in existing_questions):
+                return ""  # Domain question already covers this
+            return "What can authors vs readers do?"
+        if "team" in text:
+            return "What defines the team and their access levels?"
+        if "customers" in text:
+            return "What customer segments or personas apply?"
+    if slot.key == "scope_boundary" and "trello" in text:
+        return "Which core features to include in the simplified version?"
+    return slot.question
+
+
+def _extract_phrase_anchors(text: str) -> list[str]:
+    """Extract phrase-level semantic anchors from the text (preserve, do not collapse)."""
+    anchors = []
+    # Mobile app for X
+    m = re.search(r"mobile\s+app\s+for\s+([^.?!,]+)", text, re.IGNORECASE)
+    if m:
+        anchors.append(f"mobile app for {m.group(1).strip()}")
+    # Dashboard for X
+    m = re.search(r"dashboard\s+for\s+(?:the\s+)?([^.?!,]+?)(?:\.|to\s|$)", text, re.IGNORECASE)
+    if m:
+        anchors.append(f"dashboard for {m.group(1).strip()}")
+    # Tool that helps with X
+    m = re.search(r"tool\s+that\s+helps\s+with\s+(\w+)", text, re.IGNORECASE)
+    if m:
+        anchors.append(f"tool that helps with {m.group(1)}")
+    # Internal wiki for X
+    m = re.search(r"internal\s+wiki\s+for\s+([^.?!,]+)", text, re.IGNORECASE)
+    if m:
+        anchors.append(f"internal wiki for {m.group(1).strip()}")
+    # Like X but simpler
+    m = re.search(r"like\s+(\w+)\s+but\s+(\w+)", text, re.IGNORECASE)
+    if m:
+        anchors.append(f"like {m.group(1)} but {m.group(2)}")
+    # X where authors/readers ...
+    m = re.search(r"(?:blog|wiki|app)\s+where\s+([^.?!]+)", text, re.IGNORECASE)
+    if m:
+        anchors.append(m.group(1).strip())
+    return anchors
+
+
+def _extract_explicitly_stated(text: str) -> list[str]:
+    """Extract information that is explicitly stated (actors, platform, permissions, scope hints)."""
+    stated = []
+    if any(x in text for x in ["customers", "customer"]):
+        stated.append("Actors: customers")
+    if any(x in text for x in ["authors", "readers"]):
+        if "authors" in text and "readers" in text:
+            stated.append("Actors: authors and readers")
+        elif "authors" in text:
+            stated.append("Actors: authors")
+        elif "readers" in text:
+            stated.append("Actors: readers")
+    if any(x in text for x in ["team", "teams"]):
+        stated.append("Actors: team")
+    if "company" in text or "our company" in text:
+        stated.append("Context: company / internal")
+    if "small teams" in text:
+        stated.append("Context: small teams")
+    if "mobile" in text or "mobile app" in text:
+        stated.append("Platform: mobile")
+    if "online" in text:
+        stated.append("Channel: online")
+    if "internal" in text:
+        stated.append("Scope: internal")
+    if "everyone can edit" in text or "everyone can" in text:
+        stated.append("Permission hint: everyone can edit")
+    if "like trello" in text or "like trello but" in text:
+        stated.append("Reference: Trello-like")
+    if "quickly" in text or "launch" in text:
+        stated.append("Timing hint: quick launch")
+    if "maybe" in text or "later" in text:
+        stated.append("Deferred: features marked maybe/later")
+    return stated
+
+
 def _extract_goal(raw: str) -> str:
-    """Extract apparent goal from raw requirement text, preserving domain anchors."""
+    """Extract apparent goal from raw requirement text, preserving phrase-level anchors."""
     text = _normalize(raw)
     if not text:
         return "User has provided a requirement (details unclear)."
+
+    # Prefer phrase anchors over single-noun collapse
+    phrase_anchors = _extract_phrase_anchors(text)
+    if phrase_anchors:
+        return f"User wants: {phrase_anchors[0]}."
 
     # Pattern: want/need/would like + phrase
     match = re.search(r"(?:i\s+)?(?:want|need|would like)\s+([^.?!]+)", text, re.IGNORECASE)
@@ -206,7 +300,12 @@ def _extract_goal(raw: str) -> str:
         if len(phrase) > 5:
             return f"User needs: {phrase}."
 
-    # Pattern: tool/app that helps with X (preserve domain noun)
+    # Pattern: X for Y (e.g. "Mobile app for ordering food")
+    match = re.search(r"(?:mobile\s+)?app\s+for\s+([^.?!,]+)", text, re.IGNORECASE)
+    if match:
+        return f"User wants: app for {match.group(1).strip()}."
+
+    # Pattern: tool/app that helps with X
     match = re.search(
         r"(?:tool|app|feature|system)\s+(?:that\s+)?(?:helps?\s+with|for)\s+(\w+)",
         text,
@@ -215,7 +314,7 @@ def _extract_goal(raw: str) -> str:
     if match:
         return f"User wants a tool/app for: {match.group(1)}."
 
-    # Pattern: build/create + phrase (capture through "invoices" etc.)
+    # Pattern: build/create + phrase
     match = re.search(
         r"(?:build|create|make|develop)\s+(?:a\s+)?([^.!?]+?)(?:\.|$)",
         text,
@@ -226,7 +325,16 @@ def _extract_goal(raw: str) -> str:
         if len(phrase) > 4:
             return f"User wants to build: {phrase}."
 
-    # Fallback: use domain anchor if present
+    # An internal wiki for our company
+    match = re.search(r"(?:an?\s+)?internal\s+wiki\s+for\s+([^.?!]+)", text, re.IGNORECASE)
+    if match:
+        return f"User wants: internal wiki for {match.group(1).strip()}."
+
+    # Something like X but Y
+    match = re.search(r"something\s+like\s+([^.?!]+)", text, re.IGNORECASE)
+    if match:
+        return f"User wants: {match.group(1).strip()}."
+
     anchor = _extract_domain_anchor(text)
     if anchor:
         return f"User wants a solution for: {anchor}."
@@ -243,8 +351,9 @@ def _build_output_from_slots(
 ) -> SpecClarifyOutput:
     """Generate SpecClarifyOutput from slot states."""
     text = _normalize(raw)
+    stated = _extract_explicitly_stated(text)
 
-    # confirmed: only CLEAR slots (goal always included if we extracted it)
+    # confirmed: include goal and any explicit statements
     confirmed = [goal_text]
     for slot in SLOTS:
         if slot.key == "goal":
@@ -261,10 +370,10 @@ def _build_output_from_slots(
     if not missing:
         missing = ["general scope and constraints"]
 
-    # must_ask: domain-specific first (up to 2), then slot questions, max 3 total
+    # must_ask: domain-specific first, then targeted slot questions (avoid generic when explicit)
     must_ask = []
     domain_questions = _get_domain_specific_questions(text)
-    for q in domain_questions[:2]:  # At most 2 domain-specific
+    for q in domain_questions[:2]:
         must_ask.append(q)
     for slot in SLOTS:
         if len(must_ask) >= 3:
@@ -272,13 +381,16 @@ def _build_output_from_slots(
         if slot.key == "goal":
             continue
         if slot_status.get(slot.key) in (SlotStatus.PARTIAL, SlotStatus.MISSING):
-            q = slot.question
-            if q not in must_ask:
+            q = _slot_question_for_context(slot, text, must_ask)
+            if q and q not in must_ask:
                 must_ask.append(q)
     must_ask = must_ask[:3]
 
-    # assumptions: execution-oriented, derived from slot states where possible
-    assumptions = ["Assume a web-based MVP unless otherwise specified."]
+    # assumptions: execution-oriented; do not assume web when mobile is explicit
+    if "mobile" in text:
+        assumptions = ["Assume mobile-first unless web is explicitly preferred."]
+    else:
+        assumptions = ["Assume a web-based MVP unless otherwise specified."]
 
     if slot_status.get("auth_and_roles") in (SlotStatus.PARTIAL, SlotStatus.MISSING):
         assumptions.append("Assume a single end-user role unless multiple roles are explicitly mentioned.")
@@ -302,21 +414,25 @@ def _build_output_from_slots(
         risks.extend(["Key requirement areas need clarification.", "Assumptions may not match stakeholder intent."])
     risks = risks[:4]
 
-    # draft_spec: actionable, with MVP and optional out-of-scope section
+    # draft_spec: explicitly stated vs unresolved, concise
     has_deferred = any(x in text for x in ["maybe", "later", "eventually", "optional"])
 
     lines = [
         "## Goal",
         goal_text,
         "",
-        "## MVP",
-        "To be defined after clarifying: " + "; ".join(missing[:5]) + ".",
-        "",
-        "## Users",
-        "Target users need clarification." if slot_status.get("target_users") != SlotStatus.CLEAR else "See confirmed.",
+    ]
+    if stated:
+        lines.extend(["## Explicitly Stated", ""])
+        for s in stated[:6]:
+            lines.append(f"- {s}")
+        lines.append("")
+    lines.extend([
+        "## Unresolved / Needs Clarification",
+        "; ".join(missing[:5]) + ".",
         "",
         "## Open Questions",
-    ]
+    ])
     for q in must_ask:
         lines.append(f"- {q}")
     if has_deferred:
